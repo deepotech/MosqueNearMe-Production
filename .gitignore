@@ -1,0 +1,65 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# dependencies
+/node_modules
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# testing
+/coverage
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# misc
+.DS_Store
+*.pem
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# env files — exclude secrets, allow example templates
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env.production
+backend/.env
+backend/.env.local
+# Allow .env.example files (safe templates)
+!.env.example
+!backend/.env.example
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# backend build artifacts
+/backend/node_modules
+/backend/dist
+/backend/data
+
+# large deployment archives
+*.zip
+
+# build logs
+build_log*.txt
+
+# legacy folders
+/_legacy

@@ -1,0 +1,40 @@
+{
+  "name": "app_new",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "prebuild": "npx tsx scripts/check-canonicals.ts && npx tsx scripts/generate-slug-registry.ts && npx tsx scripts/build-safety-check.ts && npx tsx scripts/generate-static-assets.ts",
+    "build": "next build",
+    "postbuild": "npx tsx scripts/generate-redirects.ts && npx tsx scripts/check-sitemap.ts",
+    "start": "next start",
+    "lint": "eslint",
+    "slug:generate": "npx tsx scripts/generate-slug-registry.ts",
+    "slug:check": "npx tsx scripts/build-safety-check.ts",
+    "redirects:generate": "npx tsx scripts/generate-redirects.ts",
+    "seo:check-canonicals": "npx tsx scripts/check-canonicals.ts",
+    "seo:check-sitemap": "npx tsx scripts/check-sitemap.ts",
+    "seo:health": "npx tsx scripts/seo-health-report.ts",
+    "seo:indexability": "npx tsx scripts/check-indexability.ts",
+    "seo:audit": "npx tsx scripts/check-canonicals.ts && npx tsx scripts/build-safety-check.ts && npx tsx scripts/check-sitemap.ts && npx tsx scripts/seo-health-report.ts && npx tsx scripts/check-indexability.ts"
+  },
+  "dependencies": {
+    "adhan": "^4.4.3",
+    "leaflet": "^1.9.4",
+    "next": "16.0.3",
+    "papaparse": "^5.5.3",
+    "react": "19.2.0",
+    "react-dom": "19.2.0",
+    "react-leaflet": "^5.0.0"
+  },
+  "devDependencies": {
+    "@types/leaflet": "^1.9.21",
+    "@types/node": "^20",
+    "@types/papaparse": "^5.5.0",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.0.3",
+    "typescript": "^5"
+  }
+}
