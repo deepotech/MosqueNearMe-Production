@@ -5,6 +5,7 @@ import { donationsRouter } from './routes/donations';
 import { webhooksRouter } from './routes/webhooks';
 import { adminRouter } from './routes/admin';
 import { generalApiLimiter } from './rate-limiter';
+import { getMosqueCount } from './mosque-validator';
 
 const app = express();
 
@@ -56,12 +57,16 @@ app.use('/api/admin', generalApiLimiter);
 // Health check (unauthenticated, no sensitive info)
 // ─────────────────────────────────────────────────────────────────────────────
 app.get('/health', (_req, res) => {
+  const mosqueCount = getMosqueCount();
   res.json({
     status: 'healthy',
     mode: CONFIG.paypal.mode,
+    mosqueCount,
+    mosqueRegistryOk: mosqueCount > 0,
     timestamp: new Date().toISOString(),
   });
 });
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Mount Routes

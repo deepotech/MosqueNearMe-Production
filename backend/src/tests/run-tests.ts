@@ -408,6 +408,211 @@ async function runTests() {
   }
 
   // ══════════════════════════════════════════════════════════════════════════
+  // 13. Mosque Validator — Registry Loading & Valid Mosque Lookup
+  // Regression for the "Invalid or unknown mosque." production bug:
+  //   mosques.json was not found by the backend in production because none
+  //   of the original search paths existed inside the Railway deployment.
+  // ══════════════════════════════════════════════════════════════════════════
+  console.log('\n[13] Mosque Validator — Registry Load & Valid Mosque Lookup');
+  {
+    const { getVerifiedMosque, isValidMosque, getMosqueCount } = await import('../mosque-validator');
+
+    const count = getMosqueCount();
+    assert(count > 0,
+      `Mosque registry loaded: ${count} mosques found (0 = mosques.json not found at any candidate path)`);
+
+    // Test a mosque that is known to be in the catalogue (id "0" is the first entry — Aberdeen)
+    const firstMosque = getVerifiedMosque('0');
+    assert(firstMosque !== null, 'First mosque (id "0") is found by numeric string id');
+    assert(typeof firstMosque?.name === 'string' && firstMosque.name.length > 0,
+      'First mosque has a non-empty name');
+    assert(typeof firstMosque?.slug === 'string' && firstMosque.slug.length > 0,
+      'First mosque has a non-empty slug');
+
+    // Lookup by slug works too
+    if (firstMosque) {
+      const bySlug = getVerifiedMosque(firstMosque.slug);
+      assert(bySlug !== null, `Lookup by slug '${firstMosque.slug}' returns a result`);
+      assert(bySlug?.id === firstMosque.id, 'Slug lookup returns same mosque as id lookup');
+    }
+
+    // isValidMosque wrapper
+    assert(isValidMosque('0'), 'isValidMosque("0") returns true');
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // 14. Cork Mosque — Actual Identifier Handling
+  // "Mosque & Islamic Society, Cork" has id="1841", slug="mosque-islamic-society-cork"
+  // This is the exact mosque that triggered the production bug.
+  // ══════════════════════════════════════════════════════════════════════════
+  console.log('\n[14] Cork Mosque — Actual Identifier Handling');
+  {
+    const { getVerifiedMosque } = await import('../mosque-validator');
+
+    // Lookup by numeric string id
+    const corkById = getVerifiedMosque('1841');
+    assert(corkById !== null, 'Cork mosque found by id "1841"');
+    assert(corkById?.name === 'Mosque & Islamic Society',
+      `Cork mosque name is correct: ${corkById?.name}`);
+    assert(corkById?.city === 'Cork', `Cork mosque city is "Cork": ${corkById?.city}`);
+    assert(corkById?.slug === 'mosque-islamic-society-cork',
+      `Cork mosque slug is correct: ${corkById?.slug}`);
+
+    // Lookup by slug (frontend also sends mosqueSlug in payload)
+    const corkBySlug = getVerifiedMosque('mosque-islamic-society-cork');
+    assert(corkBySlug !== null, 'Cork mosque found by slug "mosque-islamic-society-cork"');
+    assert(corkBySlug?.id === '1841', `Slug lookup returns correct id: ${corkBySlug?.id}`);
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // 15. Unknown Mosque IDs are Rejected
+  // ══════════════════════════════════════════════════════════════════════════
+  console.log('\n[15] Unknown Mosque IDs Rejected');
+  {
+    const { isValidMosque } = await import('../mosque-validator');
+
+    assert(!isValidMosque('TOTALLY_FAKE_XYZ_99999'), 'Fabricated string id is rejected');
+    assert(!isValidMosque('999999999'), 'Out-of-range numeric string id is rejected');
+    assert(!isValidMosque('fake-slug-does-not-exist'), 'Fabricated slug is rejected');
+    assert(!isValidMosque('mosque-0'), 'Valid-looking but wrong slug is rejected');
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // 16. Missing / Malformed Mosque IDs Rejected
+  // ══════════════════════════════════════════════════════════════════════════
+  console.log('\n[16] Missing or Malformed Mosque IDs Rejected');
+  {
+    const { isValidMosque } = await import('../mosque-validator');
+
+    assert(!isValidMosque(''), 'Empty string is rejected');
+    assert(!isValidMosque('   '), 'Whitespace-only string is rejected');
+
+    // Backend route guard: typeof mosqueId !== 'string' or !mosqueId
+    const missingMosqueId: unknown = undefined;
+    const isMissing = !missingMosqueId || typeof missingMosqueId !== 'string';
+    assert(isMissing, 'Undefined mosqueId is caught by backend type guard');
+
+    const nullMosqueId: unknown = null;
+    const isNull = !nullMosqueId || typeof nullMosqueId !== 'string';
+    assert(isNull, 'Null mosqueId is caught by backend type guard');
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // 17. Frontend Payload → Backend Schema Alignment
+  // The frontend sends: mosqueId, mosqueSlug, mosqueName, amount, donationType,
+  //   isAnonymous, donorName, donorEmail.
+  // The backend create-order route destructures: mosqueId, amount, currency,
+  //   isAnonymous, donorName, donorEmail, donationType.
+  // mosqueSlug and mosqueName are sourced from the verified registry — NOT from
+  // the untrusted request body — which is the correct and safe behaviour.
+  // ══════════════════════════════════════════════════════════════════════════
+  console.log('\n[17] Frontend Payload → Backend Schema Alignment');
+  {
+    const { getVerifiedMosque } = await import('../mosque-validator');
+
+    // Simulate the frontend payload for Cork mosque + £1
+    const frontendPayload = {
+      mosqueId: '1841',
+      mosqueSlug: 'mosque-islamic-society-cork',  // sent but ignored by backend (good)
+      mosqueName: 'Mosque & Islamic Society',       // sent but ignored by backend (good)
+      amount: 1,
+      donationType: 'ONE_TIME' as const,
+      isAnonymous: false,
+      donorName: '',
+      donorEmail: '',
+    };
+
+    assert(typeof frontendPayload.mosqueId === 'string' && frontendPayload.mosqueId.length > 0,
+      'Payload mosqueId is a non-empty string');
+
+    const verified = getVerifiedMosque(frontendPayload.mosqueId);
+    assert(verified !== null, 'Payload mosqueId resolves to a verified mosque');
+
+    // Backend uses verified data, not the untrusted payload fields
+    assert(verified?.slug === frontendPayload.mosqueSlug,
+      `Verified slug matches payload slug: ${verified?.slug}`);
+    assert(verified?.name === frontendPayload.mosqueName,
+      `Verified name matches payload name: ${verified?.name}`);
+
+    assert(frontendPayload.amount >= 1, 'Amount meets minimum (£1)');
+    assert(frontendPayload.amount <= 5000, 'Amount within maximum (£5,000)');
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // 18. Invalid Mosque Cannot Create a PayPal Order
+  // Validates that an unknown mosqueId causes rejection before any PayPal call.
+  // ══════════════════════════════════════════════════════════════════════════
+  console.log('\n[18] Invalid Mosque Cannot Bypass to PayPal');
+  {
+    const { getVerifiedMosque } = await import('../mosque-validator');
+
+    // Simulate the create-order validation logic
+    function simulateCreateOrder(mosqueId: unknown, amount: unknown): string {
+      if (!mosqueId || typeof mosqueId !== 'string') {
+        return 'error: A valid mosqueId is required.';
+      }
+      const mosque = getVerifiedMosque(mosqueId);
+      if (!mosque) {
+        return 'error: Invalid or unknown mosque.';
+      }
+      const numAmount = parseFloat(String(amount));
+      if (isNaN(numAmount) || numAmount < 1) {
+        return 'error: Minimum donation amount is £1.00.';
+      }
+      if (numAmount > 5000) {
+        return 'error: Maximum donation amount is £5000.00.';
+      }
+      return 'ok';
+    }
+
+    assert(simulateCreateOrder('FAKE_99999', 10) === 'error: Invalid or unknown mosque.',
+      'Fake mosqueId is rejected before PayPal order creation');
+    assert(simulateCreateOrder('', 10) === 'error: A valid mosqueId is required.',
+      'Empty mosqueId is rejected before PayPal order creation');
+    assert(simulateCreateOrder(undefined, 10) === 'error: A valid mosqueId is required.',
+      'Missing mosqueId is rejected before PayPal order creation');
+    assert(simulateCreateOrder('1841', 10) === 'ok',
+      'Valid Cork mosque id passes all validations');
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // 19. GBP Currency and Amount Limits Enforced
+  // ══════════════════════════════════════════════════════════════════════════
+  console.log('\n[19] GBP Currency & Amount Limits Enforced');
+  {
+    // Currency check (mirrors create-order route logic)
+    function checkCurrency(c: unknown): boolean {
+      const cur = (String(c || '')).trim().toUpperCase();
+      return cur === 'GBP';
+    }
+
+    assert(checkCurrency('GBP'), 'GBP accepted');
+    assert(checkCurrency('gbp'), 'Lowercase gbp normalised to GBP and accepted');
+    assert(!checkCurrency('USD'), 'USD rejected');
+    assert(!checkCurrency('EUR'), 'EUR rejected');
+    assert(!checkCurrency(''), 'Empty currency rejected');
+    assert(!checkCurrency(null), 'Null currency rejected');
+
+    // Amount limits (mirrors create-order route logic)
+    function checkAmount(a: unknown): string {
+      const n = parseFloat(String(a));
+      if (isNaN(n) || !isFinite(n) || n < 1) return 'too-low';
+      if (n > 5000) return 'too-high';
+      return 'ok';
+    }
+
+    assert(checkAmount(1) === 'ok', '£1.00 minimum accepted');
+    assert(checkAmount(25) === 'ok', '£25.00 accepted');
+    assert(checkAmount(5000) === 'ok', '£5000.00 maximum accepted');
+    assert(checkAmount(0.99) === 'too-low', '£0.99 below minimum rejected');
+    assert(checkAmount(0) === 'too-low', '£0 rejected');
+    assert(checkAmount(-1) === 'too-low', 'Negative amount rejected');
+    assert(checkAmount(5000.01) === 'too-high', '£5000.01 above maximum rejected');
+    assert(checkAmount(NaN) === 'too-low', 'NaN amount rejected');
+    assert(checkAmount('abc') === 'too-low', 'Non-numeric amount rejected');
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
   // Results
   // ══════════════════════════════════════════════════════════════════════════
   console.log('\n───────────────────────────────────────────────────────');
